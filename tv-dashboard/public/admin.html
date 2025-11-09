@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Admin • Metas S+M e Lançamentos</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121823; --text:#e6eef9; --muted:#90a3bd;
+    --ok:#2ecc71; --warn:#ffb020; --err:#ff6b6b; --line:#243142;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{max-width:1200px;margin:24px auto;padding:0 16px}
+  h1{margin:0 0 8px}
+  .grid{display:grid;grid-template-columns:1fr 2fr;gap:18px;align-items:start}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  label{display:block;font-size:14px;color:var(--muted);margin:8px 0 6px}
+  input,button,textarea{font:inherit}
+  input,textarea,select{
+    width:100%;
+    padding:10px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#0f1520;
+    color:var(--text);
+  }
+  textarea{min-height:68px;resize:vertical}
+  .row{display:flex;gap:10px;align-items:center}
+  .row > *{flex:1}
+  .btn{padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:#142033;color:#dbe8ff;cursor:pointer}
+  .btn.ok{background:#133a26;border-color:#1e6a41;color:#aef2c2}
+  .btn.warn{background:#3b2b11;border-color:#684b19;color:#ffd9a1}
+  .btn.err{background:#3a1717;border-color:#6a2a2a;color:#ffb3b3}
+  table{width:100%;border-collapse:collapse;margin-top:8px}
+  th,td{border-bottom:1px solid var(--line);padding:10px 8px;text-align:left}
+  th{color:#bcd0ea;font-weight:600}
+  tr:hover{background:#0e1622}
+  .right{text-align:right}
+  .center{text-align:center}
+  .note{color:var(--muted);font-size:13px}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <h1>Admin • Semanal & Mensal</h1>
+  <div class="note" id="aggResume" style="margin:0 0 12px"></div>
+
+  <div class="grid">
+    <!-- Painel esquerdo -->
+    <div class="card">
+      <!-- Metas S+M -->
+      <div>
+        <label>Metas agregadas</label>
+        <div class="row">
+          <div>
+            <label style="margin-top:0">Meta semanal (R$)</label>
+            <input id="weeklyGoal" type="number" step="1" min="1" placeholder="ex: 2000000">
+          </div>
+          <div>
+            <label style="margin-top: 0">Meta mensal (R$)</label>
+            <input id="monthlyGoal" type="number" step="1" min="1" placeholder="ex: 8000000">
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px">
+          <button class="btn ok" onclick="setGoals()">Salvar metas S+M</button>
+          <span class="note" id="aggHint">Use números inteiros (R$)</span>
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+
+      <!-- Lançamentos -->
+      <div>
+        <label>Novo lançamento / ajuste (pode ser negativo)</label>
+        <div class="row">
+          <input id="amount" type="number" step="0.01" placeholder="Valor (ex: 349.90)">
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Vendedor</label>
+            <input id="seller" type="text" maxlength="60" placeholder="Ex.: Nome do vendedor">
+          </div>
+          <div>
+            <label>Cliente</label>
+            <input id="client" type="text" maxlength="140" placeholder="Ex.: Nome do cliente">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top: 10px">
+          <button class="btn ok"  onclick="addEntry()">Adicionar</button>
+          <button class="btn warn" onclick="updateEntry()">Atualizar selecionado</button>
+          <button class="btn err"  onclick="deleteEntry()">Excluir selecionado</button>
+        </div>
+
+        <div class="row" style="margin-top: 20px">
+          <button class="btn warn" onclick="resetWeek()">Zerar semanal</button>
+          <button class="btn warn" onclick="resetMonth()">Zerar mensal</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card">
+      <label style="display:flex;justify-content:space-between;align-items:center">
+        Lançamentos do dia (lista operacional)
+        <span class="note">Clique numa linha para selecionar/editar</span>
+      </label>
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>Vendedor</th>
+            <th>Cliente</th>
+            <th class="right">Valor (R$)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  let entries = [];
+  let selectedId = null;
+  const fmt = n => Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const sanitize = s => (s||'').toString().replace(/[<>&]/g,'');
+
+  async function loadState(){
+    const r = await fetch('/api/admin/state');
+    const s = await r.json();
+    entries = s.entries || [];
+    // metas
+    document.getElementById('weeklyGoal').value  = s.weeklyGoal  || '';
+    document.getElementById('monthlyGoal').value = s.monthlyGoal || '';
+    // tabela
+    const tb = document.querySelector('#tbl tbody');
+    tb.innerHTML = '';
+    for (const e of entries) {
+      const tr = document.createElement('tr');
+      tr.dataset.id = e.id;
+      tr.innerHTML = `
+        <td>${sanitize(e.seller || '-')}</td>
+        <td>${sanitize(e.client || e.note || '')}</td>
+        <td class="right">${fmt(e.amount)}</td>
+      `;
+      tr.onclick = () => selectRow(e);
+      tb.appendChild(tr);
+    }
+  }
+
+  function selectRow(e){
+    selectedId = e.id;
+    document.getElementById('amount').value = e.amount;
+    document.getElementById('seller').value = e.seller || '';
+    document.getElementById('client').value = e.client || e.note || '';
+    document.querySelectorAll('#tbl tbody tr').forEach(tr=>{
+      tr.style.outline = (tr.dataset.id===e.id) ? '2px solid #3aa6ff' : 'none';
+    });
+  }
+
+  async function addEntry(){
+    const amount = parseFloat(document.getElementById('amount').value);
+    const seller = document.getElementById('seller').value.trim();
+    const client = document.getElementById('client').value.trim();
+    if(!Number.isFinite(amount) || amount===0){ alert('Informe um valor (pode ser negativo).'); return; }
+    const r = await fetch('/api/admin/add',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ amount, seller, client })
+    });
+    const d = await r.json(); if(!d.success){ alert(d.error||'Erro'); return; }
+    document.getElementById('amount').value='';
+    document.getElementById('seller').value='';
+    document.getElementById('client').value='';
+    selectedId=null;
+    await loadState();
+    await loadAggregates();
+  }
+
+  async function updateEntry(){
+    if(!selectedId){ alert('Selecione um lançamento na tabela.'); return; }
+    const amount = parseFloat(document.getElementById('amount').value);
+    const seller = document.getElementById('seller').value.trim();
+    const client = document.getElementById('client').value.trim();
+    if(!Number.isFinite(amount) || amount===0){ alert('Informe um valor (pode ser negativo).'); return; }
+    const r = await fetch('/api/admin/update/'+selectedId,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ amount, seller, client })
+    });
+    const d = await r.json(); if(!d.success){ alert(d.error||'Erro'); return; }
+    await loadState();
+    await loadAggregates();
+  }
+
+  async function deleteEntry(){
+    if(!selectedId){ alert('Selecione um lançamento na tabela.'); return; }
+    if(!confirm('Excluir este lançamento?')) return;
+    const r = await fetch('/api/admin/delete/'+selectedId,{method:'DELETE'});
+    const d = await r.json(); if(!d.success){ alert(d.error||'Erro'); return; }
+    selectedId=null;
+    document.getElementById('amount').value='';
+    document.getElementById('seller').value='';
+    document.getElementById('client').value='';
+    await loadState();
+    await loadAggregates();
+  }
+
+  async function resetWeek(){
+    if(!confirm('Zerar o arco SEMANAL? Os lançamentos não serão apagados.')) return;
+    const r = await fetch('/api/reset-week', { method:'POST' });
+    const d = await r.json(); if(!d.success){ alert(d.error||'Erro'); return; }
+    await loadAggregates();
+  }
+  async function resetMonth(){
+    if(!confirm('Zerar o arco MENSAL? Os lançamentos não serão apagados.')) return;
+    const r = await fetch('/api/reset-month', { method:'POST' });
+    const d = await r.json(); if(!d.success){ alert(d.error||'Erro'); return; }
+    await loadAggregates();
+  }
+
+  async function setGoals(){
+    const w = parseFloat(document.getElementById('weeklyGoal').value);
+    const m = parseFloat(document.getElementById('monthlyGoal').value);
+    if(!(Number.isFinite(w) && w>0) || !(Number.isFinite(m) && m>0)){
+      alert('Informe metas válidas (inteiros em R$).'); return;
+    }
+    const r = await fetch('/api/set-goals', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ weeklyGoalBRL: Math.round(w), monthlyGoalBRL: Math.round(m) })
+    });
+    const d = await r.json(); if(!d.success){ alert(d.error||'Erro ao atualizar metas.'); return; }
+    const hint = document.getElementById('aggHint');
+    if(hint){ hint.textContent = 'Metas atualizadas ✔'; setTimeout(()=>hint.textContent='Use números inteiros (R$)', 2500); }
+    await loadAggregates();
+  }
+
+  async function loadAggregates(){
+    const r = await fetch('/api/summary');
+    const s = await r.json();
+    const el = document.getElementById('aggResume'); if(!el) return;
+    const w = s.week, m = s.month;
+    el.textContent =
+      `Semana: ${fmt(w?.total||0)} / ${fmt(w?.goal||0)} (${(w?.percentage||0).toFixed(1)}%) • ` +
+      `Mês: ${fmt(m?.total||0)} / ${fmt(m?.goal||0)} (${(m?.percentage||0).toFixed(1)}%)`;
+  }
+
+  (async function init(){
+    await loadState();
+    await loadAggregates();
+    setInterval(loadAggregates, 10000);
+  })();
+</script>
+</body>
+</html>

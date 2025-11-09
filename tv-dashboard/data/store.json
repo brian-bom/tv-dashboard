@@ -1,0 +1,69 @@
+{
+  "currentDate": "2025-11-09",
+  "totalSales": 502000,
+  "goalBRL": 500000,
+  "entries": [
+    {
+      "id": "mhrzxda4-dlzfn6",
+      "amount": 3200,
+      "seller": "Igor",
+      "client": "Mormai",
+      "note": "Mormai",
+      "ts": 1762709839996
+    },
+    {
+      "id": "mhrzyau8-y7xu2p",
+      "amount": 3000,
+      "seller": "Ezequiel",
+      "client": "Nike",
+      "note": "Nike",
+      "ts": 1762709883488
+    }
+  ],
+  "history": [
+    {
+      "id": "mhrx3eag-m2sumq",
+      "amount": 5000,
+      "note": "Mormai",
+      "ts": 1762705082392
+    },
+    {
+      "id": "mhrx4frq-t5fwdb",
+      "amount": 40000,
+      "note": "",
+      "ts": 1762705130966
+    },
+    {
+      "id": "mhrx7wc4-n3onho",
+      "amount": 25000,
+      "note": "",
+      "ts": 1762705292404
+    },
+    {
+      "id": "mhrx85r2-wvk253",
+      "amount": 130000,
+      "note": "",
+      "ts": 1762705304606
+    },
+    {
+      "id": "mhrzxda4-dlzfn6",
+      "amount": 3200,
+      "seller": "Igor",
+      "client": "Mormai",
+      "note": "Mormai",
+      "ts": 1762709839996
+    },
+    {
+      "id": "mhrzyau8-y7xu2p",
+      "amount": 3000,
+      "seller": "Ezequiel",
+      "client": "Nike",
+      "note": "Nike",
+      "ts": 1762709883488
+    }
+  ],
+  "weeklyGoalBRL": 165000,
+  "monthlyGoalBRL": 660000,
+  "weekResetTs": 1762706062908,
+  "monthResetTs": 1762706115541
+}

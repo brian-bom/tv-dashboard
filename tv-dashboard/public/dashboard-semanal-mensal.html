@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Dashboard • Semanal e Mensal</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#06090f; --ring:#1f2a38; --gradA:#00baff; --gradB:#baff00; --neon:#d6ff4f; --muted:#9bb0c9; --title:#cfe6ff; }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--title);font-family:'Montserrat',system-ui,Segoe UI,Roboto,Arial,sans-serif;display:grid;place-items:center}
+  .wrap{width:min(96vw,1800px);padding:2vh 1vw}
+  .heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:1vh}
+  .badge{font-weight:900;letter-spacing:.1em;color:#acd2ff;opacity:.9}
+  .clock{color:#7ea0c6;font-variant-numeric:tabular-nums}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:2vw}
+  .card{background:transparent;border-radius:18px;position:relative;padding-top:1vh}
+  .title{font-size:min(2.6vh,22px);letter-spacing:.12em;text-align:center;margin-bottom:.5vh;opacity:.9}
+  .gauge{position:relative;width:100%;aspect-ratio:2/1;display:grid;place-items:center;overflow:hidden}
+  svg{width:100%;height:100%}
+  .track{stroke:var(--ring);stroke-width:46;stroke-linecap:round;fill:none;opacity:.9}
+  .progress{stroke:url(#grad);stroke-width:46;stroke-linecap:round;fill:none;filter:drop-shadow(0 0 22px rgba(120,255,120,.38))}
+  .labels{position:absolute;inset:0;display:grid;place-items:center;padding-bottom:4vh;text-align:center}
+  .value{font-weight:1000;color:var(--neon);    padding-top: 230px;  font-size:min(2.8vw,86px);line-height:1;text-shadow:0 0 40px rgba(214,255,79,.55),0 0 8px rgba(214,255,79,.35)}
+  .meta{margin-top:8px;color:var(--muted);font-size:min(2.1vh,18px)}
+  @media (max-width:1100px){ .grid{grid-template-columns:1fr;row-gap:3vh} .value{font-size:min(12vw,100px)} }
+
+  .logo-container {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.logo {
+  height: 200px; /* ajuste conforme o tamanho desejado */
+  filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
+}
+
+</style>
+</head>
+<body>
+
+<div class="logo-container">
+  <img src="logoFixx.png" alt="Logo" class="logo">
+</div>
+
+<div class="wrap">
+  <div class="heading">
+    <div class="badge">PAINEL • SEMANA & MÊS</div>
+    <div class="clock" id="clock">--:--</div>
+  </div>
+
+  <div class="grid">
+    <!-- SEMANA -->
+    <section class="card">
+      <div class="title">TOTAL EM VENDAS — SEMANA</div>
+      <div class="gauge">
+        <svg viewBox="-40 0 1080 540" aria-label="Semanal">
+          <defs><linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="var(--gradA)"/><stop offset="100%" stop-color="var(--gradB)"/></linearGradient></defs>
+          <path id="wTrack" class="track" vector-effect="non-scaling-stroke"/>
+          <path id="wArc"   class="progress" vector-effect="non-scaling-stroke"/>
+        </svg>
+        <div class="labels">
+          <div class="value" id="wVal">R$ 0,00</div>
+          <div class="meta"  id="wMeta">Meta: — • 0%</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MÊS -->
+    <section class="card">
+      <div class="title">TOTAL EM VENDAS — MÊS</div>
+      <div class="gauge">
+        <svg viewBox="-40 0 1080 540" aria-label="Mensal">
+          <defs><linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="var(--gradA)"/><stop offset="100%" stop-color="var(--gradB)"/></linearGradient></defs>
+          <path id="mTrack" class="track" vector-effect="non-scaling-stroke"/>
+          <path id="mArc"   class="progress" vector-effect="non-scaling-stroke" stroke="url(#grad2)"/>
+        </svg>
+        <div class="labels">
+          <div class="value" id="mVal">R$ 0,00</div>
+          <div class="meta"  id="mMeta">Meta: — • 0%</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  // Constantes iguais para ambos os gauges
+  const R=440, CX=500, CY=500, X0=60, Y0=500, STW=46;
+  function initTrack(id){ const el=document.getElementById(id); const x1=CX+R,y1=CY; el.setAttribute('d',`M ${X0} ${Y0} A ${R} ${R} 0 0 1 ${x1} ${y1}`); el.setAttribute('stroke-width',STW); }
+  function setProgress(id,pct){
+    const arc=document.getElementById(id); const p=Math.max(0,Math.min(pct,100));
+    const th=Math.PI*(p/100); const x=CX+R*Math.cos(Math.PI-th); const y=CY-R*Math.sin(Math.PI-th);
+    arc.setAttribute('d',`M ${X0} ${Y0} A ${R} ${R} 0 0 1 ${x} ${y}`); arc.setAttribute('stroke-width',STW);
+  }
+  initTrack('wTrack'); initTrack('mTrack');
+
+  const fmt = n => Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  function tick(){ document.getElementById('clock').textContent=new Date().toLocaleString('pt-BR',{hour:'2-digit',minute:'2-digit'}) }
+  setInterval(tick,1000); tick();
+
+  async function refresh(){
+    const r = await fetch('/api/summary'); const s = await r.json();
+    const wp = s.week?.percentage || 0, mp = s.month?.percentage || 0;
+    document.getElementById('wVal').textContent = fmt(s.week?.total || 0);
+    document.getElementById('wMeta').textContent = `Meta: ${fmt(s.week?.goal || 0)} • ${wp.toFixed(1)}%`;
+    setProgress('wArc', wp);
+    document.getElementById('mVal').textContent = fmt(s.month?.total || 0);
+    document.getElementById('mMeta').textContent = `Meta: ${fmt(s.month?.goal || 0)} • ${mp.toFixed(1)}%`;
+    setProgress('mArc', mp);
+  }
+  refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>
