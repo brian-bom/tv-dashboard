@@ -78,6 +78,10 @@ const computeTotal = (entries) => sum(entries.map(e => e.amount));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+app.get("/", (req, res) => {
+  res.redirect("/admin.html");
+});
+
 // ===== ADMIN =====
 app.get("/api/admin/state", async (_req, res) => {
   const s = await readStore();
@@ -236,19 +240,21 @@ app.get("/api/week", async (req, res) => {
   const b0 = atMidnight(base);
 
   // getDay(): 0=domingo, 1=segunda, ..., 6=sábado
-  const dow = b0.getDay();
-  const deltaToMonday = (dow === 0 ? -6 : 1 - dow);
-  const monday = new Date(b0);
-  monday.setDate(b0.getDate() + deltaToMonday);
-  const nextMonday = new Date(monday);
-  nextMonday.setDate(monday.getDate() + 7);
+// Base: QUARTA 00:00 da semana corrente
+const dow = b0.getDay();                          // dia atual
+const daysSinceWed = ( (dow - 3 + 7) % 7 );       // 3 = quarta
+const wednesday = new Date(b0);
+wednesday.setDate(b0.getDate() - daysSinceWed);
+const nextWednesday = new Date(wednesday);
+nextWednesday.setDate(wednesday.getDate() + 7);
 
-  const startMs = monday.getTime();
-  const endMs = nextMonday.getTime();
+const startMs = wednesday.getTime();
+const endMs   = nextWednesday.getTime();
 
-  // Ordem fixa
-  const DAY_KEYS = ["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"];
-  const bucket = Object.fromEntries(DAY_KEYS.map(k => [k, { items: [], total: 0 }]));
+// Ordem fixa (somente os 5 dias desejados)
+const DAY_KEYS = ["quarta", "quinta", "sexta", "segunda", "terca"];
+const bucket = Object.fromEntries(DAY_KEYS.map(k => [k, { items: [], total: 0 }]));
+
 
   // Normaliza nome do dia
   const normalizeDay = (d) => {
@@ -268,12 +274,15 @@ app.get("/api/week", async (req, res) => {
   );
 
   for (const e of inWeek) {
-    const key = normalizeDay(e.ts);
-    const client = (e.client || e.note || "").toString();
-    const amount = Number(e.amount || 0);
-    bucket[key].items.push({ client, amount });
-    bucket[key].total += amount;
-  }
+  const key = normalizeDay(e.ts);
+  const client = (e.client || e.note || "").toString();
+  const amount = Number(e.amount || 0);
+  // NOVO: pula se não estiver em DAY_KEYS
+  if (!bucket[key]) continue;
+  bucket[key].items.push({ client, amount });
+  bucket[key].total += amount;
+}
+
 
   const subtotal = DAY_KEYS.reduce((acc, k) => acc + bucket[k].total, 0);
 
