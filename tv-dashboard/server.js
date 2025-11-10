@@ -69,22 +69,6 @@ const sum  = arr => Number(arr.reduce((a,b)=>a+Number(b||0),0).toFixed(2));
 const mkId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
 
 // ---------- store ----------
-async function ensureStore(){
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try { await fs.access(STORE); }
-  catch {
-    const initial = {
-      weeklyGoalBRL:  DEFAULT_WEEKLY,
-      monthlyGoalBRL: DEFAULT_MONTHLY,
-      entries: [],
-      history: [],
-      // PONTOS DE RESET DOS ARCOS (0 = nunca resetado)
-      weekResetTs: 0,
-      monthResetTs: 0,
-    };
-    await fs.writeFile(STORE, JSON.stringify(initial, null, 2), "utf8");
-  }
-}
 async function readStore(){
   await ensureStore();
   let s = JSON.parse(await fs.readFile(STORE, "utf8") || "{}");
