@@ -5,11 +5,43 @@ import { fileURLToPath } from "url";
 import { promises as fs } from "fs";
 
 dotenv.config();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Em prod (Render): DATA_DIR=/data  -> disco persistente
+// Em dev/local: cai no fallback ./data dentro do projeto
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
+const STORE    = path.join(DATA_DIR, "store.json");
+
+// garante que a pasta/arquivo existam
+async function ensureStore() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try {
+    await fs.access(STORE);
+  } catch {
+    const empty = { history: [], entries: [] };
+    await fs.writeFile(STORE, JSON.stringify(empty, null, 2));
+  }
+}
+ensureStore().catch(console.error);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.get("/debug/storage", async (req, res) => {
+  try {
+    const stat = await fs.stat(STORE);
+    const content = await fs.readFile(STORE, "utf8");
+    res.json({
+      path: STORE,
+      size_kb: (stat.size / 1024).toFixed(2),
+      sample: content.slice(0, 200) // mostra início do arquivo
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Fuso (min) p/ Brasil = -180
 const TZ_OFFSET_MIN = Number(process.env.TZ_OFFSET_MINUTES || -180);
@@ -18,8 +50,6 @@ const TZ_OFFSET_MIN = Number(process.env.TZ_OFFSET_MINUTES || -180);
 const DEFAULT_WEEKLY  = Number(process.env.WEEK_GOAL_BRL   || 2000000);
 const DEFAULT_MONTHLY = Number(process.env.MONTH_GOAL_BRL  || 8000000);
 
-const DATA_DIR = path.join(__dirname, "data");
-const STORE    = path.join(DATA_DIR, "store.json");
 
 // ---------- datas ----------
 const toLocal = (ts, offMin) => new Date(ts + offMin * 60000);
