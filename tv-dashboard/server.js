@@ -97,13 +97,38 @@ app.get("/", (req, res) => {
 });
 
 // ===== ADMIN =====
-app.get("/api/admin/state", async (_req, res) => {
-  const s = await readStore();
-  res.json({
-    entries: s.entries.sort((a,b)=>a.ts-b.ts),
-    weeklyGoal:  s.weeklyGoalBRL,
-    monthlyGoal: s.monthlyGoalBRL
-  });
+// util: formata YYYY-MM-DD (respeitando seu fuso se você já usa TZ_OFFSET_MIN)
+function toDateStr(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+app.get("/api/admin/state", async (req, res) => {
+  try {
+    const s = await readStore(); // { history: [], entries: [] , ... }
+    const qDate = (req.query.date || "").trim(); // YYYY-MM-DD opcional
+
+    let dayEntries;
+    if (qDate) {
+      // pega do histórico tudo do dia solicitado
+      dayEntries = (s.history || []).filter(e => e.date === qDate);
+    } else {
+      // mantém comportamento atual (lançamentos do “dia corrente” que você já guarda em entries)
+      dayEntries = s.entries || [];
+    }
+
+    // ordem: mais recente no topo
+    dayEntries.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+    return res.json({
+  entries: dayEntries,
+  weeklyGoal: s.weeklyGoalBRL,
+  monthlyGoal: s.monthlyGoalBRL
+});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success:false, error: "state failed" });
+  }
 });
 
 app.post("/api/admin/add", async (req, res) => {
@@ -117,19 +142,28 @@ app.post("/api/admin/add", async (req, res) => {
   }
 
   const updated = await writeStore(s => {
-    const now = new Date();
-    const dayName = now.toLocaleDateString("pt-BR", { weekday: "long" });
+    const now = Date.now(); // timestamp real (UTC)
+const pad = n => String(n).padStart(2, '0');
 
-    const item = {
-      id: mkId(),
-      amount: Number(n.toFixed(2)),
-      seller,
-      client,
-      note: client,
-      ts: now.getTime(),        // timestamp em ms
-      date: now.toISOString(),  // data completa ISO
-      day: dayName              // nome do dia da semana
-    };
+// Converte "now" para DATA LOCAL usando seu offset (ex.: -180 = Brasil)
+const local = new Date(now + TZ_OFFSET_MIN * 60000);
+
+// YYYY-MM-DD no fuso local
+const dateStr = `${local.getUTCFullYear()}-${pad(local.getUTCMonth()+1)}-${pad(local.getUTCDate())}`;
+
+// Nome do dia no fuso local (pt-BR)
+const dayName = local.toLocaleDateString("pt-BR", { weekday: "long" });
+
+const item = {
+  id: mkId(),
+  amount: Number(n.toFixed(2)),
+  seller,
+  client,
+  note: client,
+  ts: now,         // mantém o timestamp em ms (UTC)
+  date: dateStr,   // <-- agora é "YYYY-MM-DD" do fuso local
+  day: dayName
+};
 
     s.entries.push(item);
     s.history.push(item);
