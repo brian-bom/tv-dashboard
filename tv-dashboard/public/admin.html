@@ -39,117 +39,175 @@
   .right{text-align:right}
   .center{text-align:center}
   .note{color:var(--muted);font-size:13px}
+
+  /* filhos não crescem; bom para grupos de botões no header */
+.row.nogrow > * { flex: 0 0 auto; }
 </style>
 
 </head>
 <body>
-<div class="wrap">
-  <h1>Admin • Semanal & Mensal</h1>
-  <div class="note" id="aggResume" style="margin:0 0 12px"></div>
+  <div class="wrap">
+    <h1>Admin • Semanal & Mensal</h1>
+    <div class="note" id="aggResume" style="margin:0 0 12px"></div>
 
-  <div class="grid">
-    <!-- Painel esquerdo -->
-    <div class="card">
-      <!-- Metas S+M -->
-      <div>
-        <label>Metas agregadas</label>
-        <div class="row">
-          <div>
-            <label style="margin-top:0">Meta semanal (R$)</label>
-            <input id="weeklyGoal" type="number" step="1" min="1" placeholder="ex: 2000000">
+    <!-- GRID (2 colunas) -->
+    <div class="grid">
+      <!-- ========== CARD ESQUERDO ========== -->
+      <div class="card">
+        <!-- Lançamentos -->
+        <div>
+          <label>Novo lançamento</label>
+          <div class="row">
+            <input id="amount" type="number" step="0.01" placeholder="Valor (ex: 349.90)">
           </div>
-          <div>
-            <label style="margin-top: 0">Meta mensal (R$)</label>
-            <input id="monthlyGoal" type="number" step="1" min="1" placeholder="ex: 8000000">
+
+          <div class="row">
+            <div>
+              <label>Vendedor</label>
+              <input id="seller" type="text" maxlength="60" placeholder="Ex.: Nome do vendedor">
+            </div>
+            <div>
+              <label>Cliente</label>
+              <input id="client" type="text" maxlength="140" placeholder="Ex.: Nome do cliente">
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btn ok" onclick="addEntry()">Adicionar</button>
+          </div>
+
+          <!-- NÃO deixe uma <div class="row"> vazia aqui -->
+          <div class="row" style="margin-top:10px">
+            <button class="btn warn" onclick="updateEntry()">Atualizar selecionado</button>
+            <button class="btn err"  onclick="deleteEntry()">Excluir selecionado</button>
           </div>
         </div>
-        <div class="row" style="margin-top: 10px">
-          <button class="btn ok" onclick="setGoals()">Salvar metas S+M</button>
-          <span class="note" id="aggHint">Use números inteiros (R$)</span>
+
+        <!-- Metas S+M -->
+         <hr style="border:none;border-top:1px solid var(--line);margin:146x 0">
+         <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+        <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+        <div>
+          <div class="row">
+            <div>
+              <label style="margin-top:0">Meta semanal (R$)</label>
+              <input id="weeklyGoal" type="number" step="1" min="1" placeholder="ex: 2000000">
+            </div>
+            <div>
+              <label style="margin-top:0">Meta mensal (R$)</label>
+              <input id="monthlyGoal" type="number" step="1" min="1" placeholder="ex: 8000000">
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btn ok" onclick="setGoals()">Salvar metas S+M</button>
+            <span class="note" id="aggHint">Use números inteiros (R$)</span>
+          </div>
+
+          <div class="row" style="margin-top:20px">
+            <button class="btn warn" onclick="resetWeek()">Zerar semanal</button>
+            <button class="btn warn" onclick="resetMonth()">Zerar mensal</button>
+          </div>
         </div>
       </div>
+      <!-- ====== FIM CARD ESQUERDO ====== -->
 
-      <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
-
-      <!-- Lançamentos -->
-      <div>
-        <label>Novo lançamento / ajuste (pode ser negativo)</label>
-        <div class="row">
-          <input id="amount" type="number" step="0.01" placeholder="Valor (ex: 349.90)">
-        </div>
-
-        <div class="row">
+      <!-- ========== CARD DIREITO ========== -->
+      <div class="card">
+        <!-- Header -->
+        <div class="row nogrow" style="justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div>
-            <label>Vendedor</label>
-            <input id="seller" type="text" maxlength="60" placeholder="Ex.: Nome do vendedor">
+            <label style="display:block;margin:0 0 2px;">Lançamentos do dia (lista operacional)</label>
+            <div class="note">Dia: <span id="dayLabel"></span></div>
           </div>
-          <div>
-            <label>Cliente</label>
-            <input id="client" type="text" maxlength="140" placeholder="Ex.: Nome do cliente">
+
+          <div class="row nogrow" style="gap:8px;">
+            <button class="btn" onclick="shiftDay(-1)">◀ Dia anterior</button>
+            <button class="btn" onclick="goToday()">Hoje</button>
+            <button class="btn" onclick="shiftDay(1)">Próximo dia ▶</button>
           </div>
         </div>
 
-        <div class="row" style="margin-top: 10px">
-          <button class="btn ok"  onclick="addEntry()">Adicionar</button>
-          <button class="btn warn" onclick="updateEntry()">Atualizar selecionado</button>
-          <button class="btn err"  onclick="deleteEntry()">Excluir selecionado</button>
-        </div>
+        <!-- Tabela -->
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>Vendedor</th>
+              <th>Cliente</th>
+              <th class="right">Valor (R$)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
 
-        <div class="row" style="margin-top: 20px">
-          <button class="btn warn" onclick="resetWeek()">Zerar semanal</button>
-          <button class="btn warn" onclick="resetMonth()">Zerar mensal</button>
+        <div class="note" style="margin-top:6px">
+          Clique numa linha para selecionar/editar
         </div>
       </div>
+      <!-- ====== FIM CARD DIREITO ====== -->
     </div>
-
-    <!-- Tabela -->
-    <div class="card">
-      <label style="display:flex;justify-content:space-between;align-items:center">
-        Lançamentos do dia (lista operacional)
-        <span class="note">Clique numa linha para selecionar/editar</span>
-      </label>
-      <table id="tbl">
-        <thead>
-          <tr>
-            <th>Vendedor</th>
-            <th>Cliente</th>
-            <th class="right">Valor (R$)</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
+    <!-- ====== FIM GRID ====== -->
   </div>
-</div>
+</body>
 
 <script>
   let entries = [];
-  let selectedId = null;
-  const fmt = n => Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-  const sanitize = s => (s||'').toString().replace(/[<>&]/g,'');
+let selectedId = null;
+
+const fmt = n => Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const sanitize = s => (s||'').toString().replace(/[<>&]/g,'');
+
+const pad = n => String(n).padStart(2,'0');
+const toDateStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const toDateBR  = d => `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+
+let selectedDate = toDateStr(new Date()); // começa em hoje
+
+function setDayLabel(){
+  const d = new Date(selectedDate + "T00:00:00");
+  const el = document.getElementById('dayLabel');
+  if (el) el.textContent = `${toDateBR(d)} (YYYY-MM-DD: ${selectedDate})`;
+}
+
+function shiftDay(delta){
+  const d = new Date(selectedDate + "T00:00:00");
+  d.setDate(d.getDate() + delta);
+  selectedDate = toDateStr(d);
+  setDayLabel();
+  loadState();
+}
+function goToday(){
+  selectedDate = toDateStr(new Date());
+  setDayLabel();
+  loadState();
+}
 
   async function loadState(){
-    const r = await fetch('/api/admin/state');
-    const s = await r.json();
-    entries = s.entries || [];
-    // metas
-    document.getElementById('weeklyGoal').value  = s.weeklyGoal  || '';
-    document.getElementById('monthlyGoal').value = s.monthlyGoal || '';
-    // tabela
-    const tb = document.querySelector('#tbl tbody');
-    tb.innerHTML = '';
-    for (const e of entries) {
-      const tr = document.createElement('tr');
-      tr.dataset.id = e.id;
-      tr.innerHTML = `
-        <td>${sanitize(e.seller || '-')}</td>
-        <td>${sanitize(e.client || e.note || '')}</td>
-        <td class="right">${fmt(e.amount)}</td>
-      `;
-      tr.onclick = () => selectRow(e);
-      tb.appendChild(tr);
-    }
+  const r = await fetch('/api/admin/state?date=' + encodeURIComponent(selectedDate));
+  const s = await r.json();
+
+  // só os lançamentos desse dia, já vêm do server; se quiser garantir aqui:
+  entries = (s.entries || []).slice().sort((a,b) => (b.ts||0) - (a.ts||0));
+
+  // metas (mantém como estava)
+  document.getElementById('weeklyGoal').value  = s.weeklyGoal  || '';
+  document.getElementById('monthlyGoal').value = s.monthlyGoal || '';
+
+  // tabela
+  const tb = document.querySelector('#tbl tbody');
+  tb.innerHTML = '';
+  for (const e of entries) {
+    const tr = document.createElement('tr');
+    tr.dataset.id = e.id;
+    tr.innerHTML = `
+      <td>${sanitize(e.seller || '-')}</td>
+      <td>${sanitize(e.client || e.note || '')}</td>
+      <td class="right">${fmt(e.amount)}</td>
+    `;
+    tr.onclick = () => selectRow(e);
+    tb.appendChild(tr);
   }
+}
 
   function selectRow(e){
     selectedId = e.id;
@@ -249,10 +307,11 @@
   }
 
   (async function init(){
-    await loadState();
-    await loadAggregates();
-    setInterval(loadAggregates, 10000);
-  })();
+  setDayLabel();
+  await loadState();
+  await loadAggregates();        // suas metas/percentuais continuam
+  setInterval(loadAggregates, 10000);
+})();
 </script>
 </body>
 </html>
