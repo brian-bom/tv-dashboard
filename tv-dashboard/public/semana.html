@@ -165,6 +165,12 @@
   document.getElementById('nextBtn').onclick = () => shiftWeek(+1);
 
   load();
+
+  setInterval(async () => {
+  console.log("🔄 Atualizando tabela semanal...");
+  await load();
+}, 15000);
+
 </script>
 </body>
 </html>
