@@ -272,75 +272,75 @@ app.get("/api/summary", async (_req, res) => {
 // ===== WEEK TABLE API =====
 // Retorna a semana atual (segunda 00:00 até a próxima segunda 00:00) agrupada por dia
 app.get("/api/week", async (req, res) => {
-  const store = await readStore();
+  const s = await readStore();
+  const OFFSET = TZ_OFFSET_MIN * 60000;
 
-  // Base da semana: hoje ou ?date=YYYY-MM-DD (opcional)
-  const base = req.query.date
-    ? new Date(req.query.date + "T00:00:00")
-    : new Date();
+  // base = ?date=YYYY-MM-DD no fuso local, senão "agora"
+  const baseUtcTs = req.query.date
+    ? Date.parse(req.query.date + "T00:00:00Z")  // meia-noite local simulada
+    : Date.now();
 
-  // Normaliza para meia-noite local
-  const atMidnight = (d) => {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x;
-  };
-  const b0 = atMidnight(base);
+  // "hora local" = UTC + offset
+  const baseLocal = new Date(baseUtcTs + OFFSET);
 
-  // getDay(): 0=domingo, 1=segunda, ..., 6=sábado
-// Base: QUARTA 00:00 da semana corrente
-const dow = b0.getDay();                          // dia atual
-const daysSinceWed = ( (dow - 3 + 7) % 7 );       // 3 = quarta
-const wednesday = new Date(b0);
-wednesday.setDate(b0.getDate() - daysSinceWed);
-const nextWednesday = new Date(wednesday);
-nextWednesday.setDate(wednesday.getDate() + 7);
+  // normaliza para 00:00 local
+  const b0 = new Date(baseLocal);
+  b0.setUTCHours(0, 0, 0, 0);
 
-const startMs = wednesday.getTime();
-const endMs   = nextWednesday.getTime();
+  // semana inicia na QUARTA local
+  // getUTCDay(): 0=domingo .. 3=quarta
+  const dow = b0.getUTCDay();
+  const daysSinceWed = (dow - 3 + 7) % 7; // distância até a quarta
+  const wednesdayLocal = new Date(b0);
+  wednesdayLocal.setUTCDate(b0.getUTCDate() - daysSinceWed);
 
-// Ordem fixa (somente os 5 dias desejados)
-const DAY_KEYS = ["quarta", "quinta", "sexta", "segunda", "terca"];
-const bucket = Object.fromEntries(DAY_KEYS.map(k => [k, { items: [], total: 0 }]));
+  const nextWednesdayLocal = new Date(wednesdayLocal);
+  nextWednesdayLocal.setUTCDate(wednesdayLocal.getUTCDate() + 7);
 
+  // converte limites para UTC (para comparar com e.ts, que está em UTC ms)
+  const startMs = wednesdayLocal.getTime() - OFFSET;
+  const endMs   = nextWednesdayLocal.getTime() - OFFSET;
 
-  // Normaliza nome do dia
-  const normalizeDay = (d) => {
-    const name = new Date(d).toLocaleDateString("pt-BR", { weekday: "long" }).toLowerCase();
-    if (name.startsWith("seg")) return "segunda";
-    if (name.startsWith("ter")) return "terca";
-    if (name.startsWith("qua")) return "quarta";
-    if (name.startsWith("qui")) return "quinta";
-    if (name.startsWith("sex")) return "sexta";
-    if (name.startsWith("sáb") || name.startsWith("sab")) return "sabado";
+  // ordem fixa do seu ciclo
+  const DAY_KEYS = ["quarta", "quinta", "sexta", "segunda", "terca"];
+  const bucket = Object.fromEntries(DAY_KEYS.map(k => [k, { items: [], total: 0 }]));
+
+  // mapeia ts→nome do dia no FUSO LOCAL
+  const keyFromTs = (ts) => {
+    const d = new Date(ts + OFFSET);
+    const day = d.getUTCDay(); // 0..6 já no "local"
+    if (day === 1) return "segunda";
+    if (day === 2) return "terca";
+    if (day === 3) return "quarta";
+    if (day === 4) return "quinta";
+    if (day === 5) return "sexta";
+    if (day === 6) return "sabado";
     return "domingo";
-    };
+  };
 
-  // Filtra no intervalo e agrupa
-  const inWeek = (store.entries || []).filter(
-    (e) => typeof e.ts === "number" && e.ts >= startMs && e.ts < endMs
+  // pegue do HISTÓRICO no intervalo da semana
+  const inWeek = (s.history || []).filter(
+    e => typeof e.ts === "number" && e.ts >= startMs && e.ts < endMs
   );
 
   for (const e of inWeek) {
-  const key = normalizeDay(e.ts);
-  const client = (e.client || e.note || "").toString();
-  const amount = Number(e.amount || 0);
-  // NOVO: pula se não estiver em DAY_KEYS
-  if (!bucket[key]) continue;
-  bucket[key].items.push({ client, amount });
-  bucket[key].total += amount;
-}
+    const k = keyFromTs(e.ts);
+    if (!bucket[k]) continue; // ignora sáb/dom se não existir na sua grade
+    const client = (e.client || e.note || "").toString();
+    const amount = Number(e.amount || 0);
+    bucket[k].items.push({ client, amount });
+    bucket[k].total += amount;
+  }
 
-
-  const subtotal = DAY_KEYS.reduce((acc, k) => acc + bucket[k].total, 0);
+  const subtotal = Object.values(bucket).reduce((acc, d) => acc + (d.total || 0), 0);
 
   res.json({
     range: {
       startISO: new Date(startMs).toISOString(),
       endISO:   new Date(endMs).toISOString()
     },
-    days: bucket,    // dados por dia
-    order: DAY_KEYS, // ordem para o front
+    days: bucket,
+    order: DAY_KEYS,
     subtotal
   });
 });
