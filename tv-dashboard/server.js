@@ -270,51 +270,59 @@ app.get("/api/summary", async (_req, res) => {
 });
 
 // ===== WEEK TABLE API =====
-// Retorna a semana atual (segunda 00:00 até a próxima segunda 00:00) agrupada por dia
+// Semana baseada NO FUSO LOCAL (TZ_OFFSET_MIN). Ciclo: quarta → terça.
 app.get("/api/week", async (req, res) => {
   const s = await readStore();
-  const OFFSET = TZ_OFFSET_MIN * 60000;
+  const OFFSET = TZ_OFFSET_MIN * 60000; // ex.: -180 * 60k = -10800000
 
-  // base = ?date=YYYY-MM-DD no fuso local, senão "agora"
-  const baseUtcTs = req.query.date
-    ? Date.parse(req.query.date + "T00:00:00Z")  // meia-noite local simulada
-    : Date.now();
+  // 1) Obter "meia-noite LOCAL" da data base
+  let baseLocalMidnightMs;
 
-  // "hora local" = UTC + offset
-  const baseLocal = new Date(baseUtcTs + OFFSET);
+  if (req.query.date) {
+    // ?date=YYYY-MM-DD (interpreta como meia-noite LOCAL desse dia)
+    const [y, m, d] = req.query.date.split("-").map(Number);
+    // Date.UTC(y, m-1, d, 0,0,0) = meia-noite UTC desse YYYY-MM-DD
+    // Para obter a meia-noite LOCAL em UTC ms, subtraímos o OFFSET
+    baseLocalMidnightMs = Date.UTC(y, m - 1, d, 0, 0, 0);
+  } else {
+    // sem query: usa "agora" no fuso LOCAL
+    const nowLocal = new Date(Date.now() + OFFSET);
+    const y = nowLocal.getUTCFullYear();
+    const m = nowLocal.getUTCMonth();     // 0..11
+    const d = nowLocal.getUTCDate();
+    baseLocalMidnightMs = Date.UTC(y, m, d, 0, 0, 0);
+  }
 
-  // normaliza para 00:00 local
-  const b0 = new Date(baseLocal);
-  b0.setUTCHours(0, 0, 0, 0);
+  // 2) Encontrar a QUARTA-FEIRA (local) da semana corrente
+  // Transformamos baseLocalMidnightMs em Date "no espaço local":
+  const baseLocal = new Date(baseLocalMidnightMs); // usa getUTC* por ser "localizado" pelo OFFSET
+  const dowLocal = baseLocal.getUTCDay();          // 0=dom .. 3=qua
+  const daysSinceWed = (dowLocal - 3 + 7) % 7;
 
-  // semana inicia na QUARTA local
-  // getUTCDay(): 0=domingo .. 3=quarta
-  const dow = b0.getUTCDay();
-  const daysSinceWed = (dow - 3 + 7) % 7; // distância até a quarta
-  const wednesdayLocal = new Date(b0);
-  wednesdayLocal.setUTCDate(b0.getUTCDate() - daysSinceWed);
+  const wedLocal = new Date(baseLocalMidnightMs);
+  wedLocal.setUTCDate(baseLocal.getUTCDate() - daysSinceWed);
+  wedLocal.setUTCHours(0, 0, 0, 0);
 
-  const nextWednesdayLocal = new Date(wednesdayLocal);
-  nextWednesdayLocal.setUTCDate(wednesdayLocal.getUTCDate() + 7);
+  const nextWedLocal = new Date(wedLocal);
+  nextWedLocal.setUTCDate(wedLocal.getUTCDate() + 7);
 
-  // converte limites para UTC (para comparar com e.ts, que está em UTC ms)
-  const startMs = wednesdayLocal.getTime() - OFFSET;
-  const endMs   = nextWednesdayLocal.getTime() - OFFSET;
+  // 3) Converter limites da SEMANA (definidos no fuso LOCAL) para UTC ms
+  const startMs = wedLocal.getTime()   - OFFSET; // início da semana em UTC ms
+  const endMs   = nextWedLocal.getTime() - OFFSET;
 
-  // ordem fixa do seu ciclo
+  // 4) Agrupar por dia LOCAL
   const DAY_KEYS = ["quarta", "quinta", "sexta", "segunda", "terca"];
   const bucket = Object.fromEntries(DAY_KEYS.map(k => [k, { items: [], total: 0 }]));
 
-  // mapeia ts→nome do dia no FUSO LOCAL
-  const keyFromTs = (ts) => {
-    const d = new Date(ts + OFFSET);
-    const day = d.getUTCDay(); // 0..6 já no "local"
-    if (day === 1) return "segunda";
-    if (day === 2) return "terca";
-    if (day === 3) return "quarta";
-    if (day === 4) return "quinta";
-    if (day === 5) return "sexta";
-    if (day === 6) return "sabado";
+  const keyFromTs = (tsUtc) => {
+    const d = new Date(tsUtc + OFFSET);   // “leva” para o fuso local
+    const dow = d.getUTCDay();            // 0..6 já “local”
+    if (dow === 1) return "segunda";
+    if (dow === 2) return "terca";
+    if (dow === 3) return "quarta";
+    if (dow === 4) return "quinta";
+    if (dow === 5) return "sexta";
+    if (dow === 6) return "sabado";
     return "domingo";
   };
 
@@ -325,7 +333,7 @@ app.get("/api/week", async (req, res) => {
 
   for (const e of inWeek) {
     const k = keyFromTs(e.ts);
-    if (!bucket[k]) continue; // ignora sáb/dom se não existir na sua grade
+    if (!bucket[k]) continue; // ignora sáb/dom se não estão na grade
     const client = (e.client || e.note || "").toString();
     const amount = Number(e.amount || 0);
     bucket[k].items.push({ client, amount });
@@ -336,6 +344,7 @@ app.get("/api/week", async (req, res) => {
 
   res.json({
     range: {
+      // estes são UTC ms correspondentes às 00:00 LOCAL de quarta → terça seguintes
       startISO: new Date(startMs).toISOString(),
       endISO:   new Date(endMs).toISOString()
     },
