@@ -254,18 +254,34 @@ app.post("/api/reset-month", async (_req, res) => {
 // ===== TV (Semanal + Mensal) =====
 app.get("/api/summary", async (_req, res) => {
   const s = await readStore();
-  const w0 = Math.max(startOfWeekTs(TZ_OFFSET_MIN),  s.weekResetTs || 0);
-  const m0 = Math.max(startOfMonthTs(TZ_OFFSET_MIN), s.monthResetTs || 0);
 
-  const weekEntries  = s.history.filter(e => e.ts >= w0);
-  const monthEntries = s.history.filter(e => e.ts >= m0);
+  // só respeita reset manual; nada automático
+  const w0 = s.weekResetTs || 0;
+  const m0 = s.monthResetTs || 0;
+
+  const weekEntries  = (s.history || []).filter(e => e.ts >= w0);
+  const monthEntries = (s.history || []).filter(e => e.ts >= m0);
 
   const weekTotal  = computeTotal(weekEntries);
   const monthTotal = computeTotal(monthEntries);
 
+  const weekGoal  = Number(s.weeklyGoalBRL  || 0);
+  const monthGoal = Number(s.monthlyGoalBRL || 0);
+
+  const weekPct  = weekGoal  > 0 ? (weekTotal  / weekGoal)  * 100 : 0;
+  const monthPct = monthGoal > 0 ? (monthTotal / monthGoal) * 100 : 0;
+
   res.json({
-    week:  { total: weekTotal,  goal: s.weeklyGoalBRL,  percentage: Number(((weekTotal  / s.weeklyGoalBRL)  * 100 || 0).toFixed(2)) },
-    month: { total: monthTotal, goal: s.monthlyGoalBRL, percentage: Number(((monthTotal / s.monthlyGoalBRL) * 100 || 0).toFixed(2)) }
+    week:  {
+      total: weekTotal,
+      goal:  weekGoal,
+      percentage: Number(weekPct.toFixed(2))
+    },
+    month: {
+      total: monthTotal,
+      goal:  monthGoal,
+      percentage: Number(monthPct.toFixed(2))
+    }
   });
 });
 
